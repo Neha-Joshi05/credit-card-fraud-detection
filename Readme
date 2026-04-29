@@ -1,0 +1,348 @@
+# 🛡️ Credit Card Fraud Detection System
+
+A production-grade, end-to-end machine learning system for real-time credit card fraud detection — built with XGBoost, FastAPI, and a live dashboard.
+
+---
+
+## 📸 Overview
+
+This project builds a complete fraud detection pipeline from raw data generation through to a live-scoring REST API and browser dashboard. It handles the real-world challenge of extreme class imbalance (~1.5% fraud rate) using SMOTE oversampling, Optuna hyperparameter tuning, and SHAP explainability.
+
+---
+
+## 🗂️ Project Structure
+
+```
+Credit-Card-Fraud-Detection/
+├── generate_data.py          # Synthetic transaction generator (100K rows)
+├── verify_setup.py           # Environment & dependency checker
+├── main.py                   # Pipeline runner (--phase generate/ingest/all)
+├── requirements.txt          # Python dependencies
+├── .gitignore
+│
+├── data/                     # Generated at runtime (gitignored)
+│   ├── transactions.csv
+│   ├── transactions.parquet
+│   ├── X_train / y_train / X_test / y_test (.parquet)
+│   ├── feature_list.joblib
+│   └── label_encoders.joblib
+│
+├── notebooks/
+│   ├── 01_ingest.py          # Schema enforcement + type casting
+│   ├── 02_eda.py             # 7 EDA charts → outputs/
+│   ├── 03_features.py        # Feature engineering + SMOTE splits
+│   ├── 04_train.py           # XGBoost + Optuna (50 trials) + evaluation
+│   └── 05_explain.py         # SHAP waterfall, beeswarm, dependence plots
+│
+├── models/                   # Generated at runtime (gitignored)
+│   ├── xgb_fraud_model.joblib
+│   ├── optimal_threshold.joblib
+│   ├── best_params.joblib
+│   └── eval_metrics.joblib
+│
+├── outputs/                  # Charts generated at runtime (gitignored)
+│
+├── serving/
+│   ├── api.py                # FastAPI app (4 endpoints)
+│   └── test_api.py           # Endpoint test runner
+│
+└── apps/
+    └── dashboard.html        # Live fraud scoring dashboard
+```
+
+---
+
+## ⚙️ Setup
+
+### 1. Clone & create virtual environment
+
+```bash
+git clone https://github.com/Neha-Joshi05/credit-card-fraud-detection.git
+cd Credit-Card-Fraud-Detection
+
+python -m venv venv
+# Windows:
+venv\Scripts\activate
+# Mac/Linux:
+source venv/bin/activate
+```
+
+### 2. Install dependencies
+
+```bash
+pip install -r requirements.txt
+pip install pyarrow        # required for Parquet support
+```
+
+### 3. Verify your environment
+
+```bash
+python verify_setup.py
+```
+
+All items should show ✅ before proceeding.
+
+---
+
+## 🚀 Running the Pipeline
+
+Run each phase in order:
+
+```bash
+# Phase 1 — Generate & ingest data
+python generate_data.py
+python notebooks/01_ingest.py
+
+# Phase 2 — EDA & feature engineering
+python notebooks/02_eda.py
+python notebooks/03_features.py
+
+# Phase 3 — Train model & explain
+python notebooks/04_train.py       # ~3–5 min (50 Optuna trials)
+python notebooks/05_explain.py
+
+# Phase 4 — Serve API
+uvicorn serving.api:app --reload --port 8000
+```
+
+Or run Phase 1 all at once:
+
+```bash
+python main.py --phase all
+```
+
+---
+
+## 📊 Dataset
+
+Synthetic dataset of **100,000 credit card transactions** generated with realistic fraud patterns:
+
+| Property | Value |
+|---|---|
+| Total rows | 100,000 |
+| Fraud rate | ~1.5% (1,500 fraud transactions) |
+| Date range | 90-day window |
+| Features | 19 raw → 25 engineered |
+
+**Key features:** transaction amount, merchant category, country, device type, channel, velocity metrics (1h / 24h), time-of-day, international flag.
+
+**Fraud patterns baked in:** night-time transactions, burst velocity, high-risk countries (NG, RU, XX), luxury/electronics merchants, international transactions.
+
+---
+
+## 🤖 Model
+
+| Component | Detail |
+|---|---|
+| Algorithm | XGBoost (`XGBClassifier`) |
+| Tuning | Optuna TPE sampler, 50 trials |
+| Objective | Maximise PR-AUC (better than ROC-AUC for imbalanced data) |
+| Imbalance handling | SMOTE (20% synthetic minority oversampling) |
+| Split strategy | Time-aware (last 20% by timestamp = test set, no leakage) |
+| Threshold | Optimal F1 threshold (tuned post-training) |
+
+### Typical Metrics
+
+| Metric | Score |
+|---|---|
+| ROC-AUC | ~0.97+ |
+| PR-AUC | ~0.85+ |
+| F1 Score | ~0.80+ |
+| Precision | ~0.82+ |
+| Recall | ~0.78+ |
+
+*Metrics vary slightly per run due to stochastic data generation.*
+
+---
+
+## 🔍 Explainability
+
+SHAP (SHapley Additive exPlanations) charts are generated for the trained model:
+
+- **Beeswarm plot** — global feature impact across all predictions
+- **Bar chart** — mean |SHAP| feature importance ranking
+- **Dependence plots** — top 4 features vs their SHAP values
+- **Waterfall plots** — individual prediction breakdowns (highest-confidence fraud + borderline legit)
+
+Charts saved to `outputs/14_shap_*.png`.
+
+---
+
+## 🌐 API
+
+Start the API:
+
+```bash
+uvicorn serving.api:app --reload --port 8000
+```
+
+### Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/` | Health check + model status |
+| `GET` | `/metrics` | Model performance metrics |
+| `POST` | `/predict` | Score a single transaction |
+| `POST` | `/predict/batch` | Score up to 1,000 transactions |
+
+### Interactive Docs
+
+- Swagger UI → [http://localhost:8000/docs](http://localhost:8000/docs)
+- ReDoc → [http://localhost:8000/redoc](http://localhost:8000/redoc)
+
+### Example Request
+
+```bash
+curl -X POST http://localhost:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": 48000,
+    "merchant_cat": "luxury",
+    "country": "NG",
+    "city": "Unknown",
+    "device_type": "mobile",
+    "channel": "online",
+    "hour": 3,
+    "dayofweek": 6,
+    "prev_24h_tx_count_card": 14,
+    "prev_24h_amt_card": 72000,
+    "prev_1h_tx_count_card": 7,
+    "velocity_amt_1h": 38000,
+    "is_international": 1,
+    "is_night": 1
+  }'
+```
+
+### Example Response
+
+```json
+{
+  "fraud_score": 0.9341,
+  "is_fraud": true,
+  "risk_level": "CRITICAL",
+  "threshold_used": 0.312,
+  "top_risk_factors": [
+    "Night-time transaction",
+    "International transaction",
+    "High-risk merchant category",
+    "High-risk country",
+    "Burst transaction activity detected"
+  ],
+  "timestamp": "2024-03-15T03:22:11.042Z"
+}
+```
+
+---
+
+## 🖥️ Dashboard
+
+Open `apps/dashboard.html` in your browser while the API is running.
+
+Features:
+- Live API connection status (auto-ping every 15s)
+- One-click fraud / legit sample presets
+- Animated fraud score meter (0→1)
+- Plain-English risk factor explanations
+- Live transaction feed with risk badges (LOW / MEDIUM / HIGH / CRITICAL)
+- Session stats: fraud count, legit count, average score
+- Score history bar chart (last 20 predictions)
+- Model F1 and ROC-AUC pulled live from API
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Data | pandas, numpy, pyarrow |
+| ML | XGBoost, scikit-learn, imbalanced-learn |
+| Tuning | Optuna (TPE sampler) |
+| Explainability | SHAP |
+| Visualisation | matplotlib, seaborn |
+| API | FastAPI, uvicorn, pydantic |
+| Persistence | joblib |
+| Dashboard | Vanilla HTML/CSS/JS |
+
+---
+
+## 📈 EDA Charts
+
+Generated to `outputs/` after running `python notebooks/02_eda.py`.
+
+### Class Imbalance
+![Class Imbalance](outputs/01_class_imbalance.png)
+
+### Transaction Amount Distribution
+![Amount Distribution](outputs/02_amount_distribution.png)
+
+### Temporal Fraud Patterns
+![Time Patterns](outputs/03_time_patterns.png)
+
+### Fraud Rate by Merchant Category
+![Merchant Category](outputs/04_merchant_category.png)
+
+### Velocity & Behavioural Features
+![Velocity Features](outputs/05_velocity_features.png)
+
+### Feature Correlation Heatmap
+![Correlation Heatmap](outputs/06_correlation_heatmap.png)
+
+### Geographic & Channel Breakdown
+![Geo Channel](outputs/07_geo_channel.png)
+
+---
+
+## 📉 Model Evaluation Charts
+
+Generated to `outputs/` after running `python notebooks/04_train.py`.
+
+### ROC & Precision-Recall Curves
+![ROC PR Curves](outputs/08_roc_pr_curves.png)
+
+### Confusion Matrix
+![Confusion Matrix](outputs/09_confusion_matrix.png)
+
+### Feature Importance
+![Feature Importance](outputs/10_feature_importance.png)
+
+### Fraud Score Distribution
+![Score Distribution](outputs/11_score_distribution.png)
+
+### Optuna Hyperparameter Search
+![Optuna History](outputs/12_optuna_history.png)
+
+### F1 Score vs Threshold
+![Threshold Analysis](outputs/13_threshold_analysis.png)
+
+---
+
+## 🔍 SHAP Explainability Charts
+
+Generated to `outputs/` after running `python notebooks/05_explain.py`.
+
+### SHAP Beeswarm — Global Feature Impact
+![SHAP Beeswarm](outputs/14_shap_beeswarm.png)
+
+### SHAP Bar — Mean |SHAP| Importance
+![SHAP Bar](outputs/15_shap_bar.png)
+
+### SHAP Dependence Plots — Top 4 Features
+![SHAP Dependence](outputs/16_shap_dependence.png)
+
+### SHAP Waterfall — Highest-Confidence Fraud
+![SHAP Waterfall Fraud](outputs/17_shap_waterfall_fraud.png)
+
+### SHAP Waterfall — Borderline Legit
+![SHAP Waterfall Legit](outputs/18_shap_waterfall_legit.png)
+
+---
+
+
+
+## 🙏 Acknowledgements
+
+- [XGBoost](https://xgboost.readthedocs.io/) — gradient boosted trees
+- [Optuna](https://optuna.org/) — hyperparameter optimisation
+- [SHAP](https://shap.readthedocs.io/) — model explainability
+- [FastAPI](https://fastapi.tiangolo.com/) — API framework
+- [imbalanced-learn](https://imbalanced-learn.org/) — SMOTE implementation

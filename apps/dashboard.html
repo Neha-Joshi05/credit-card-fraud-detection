@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>FraudShield — Detection Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg:       #060810;
+    --surface:  #0d1117;
+    --border:   #1c2333;
+    --text:     #e6edf3;
+    --muted:    #7d8590;
+    --red:      #ff4757;
+    --red-dim:  rgba(255,71,87,0.12);
+    --green:    #23d18b;
+    --green-dim:rgba(35,209,139,0.10);
+    --amber:    #f0a500;
+    --amber-dim:rgba(240,165,0,0.12);
+    --blue:     #58a6ff;
+    --blue-dim: rgba(88,166,255,0.10);
+    --purple:   #bc8cff;
+    --glow-red: 0 0 24px rgba(255,71,87,0.3);
+    --glow-green: 0 0 24px rgba(35,209,139,0.25);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid noise texture overlay */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(88,166,255,0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(88,166,255,0.015) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Ambient glow blobs */
+  .ambient {
+    position: fixed; border-radius: 50%;
+    filter: blur(120px); pointer-events: none; z-index: 0;
+  }
+  .ambient-1 { width:500px; height:500px; top:-100px; right:-100px; background:rgba(255,71,87,0.04); }
+  .ambient-2 { width:400px; height:400px; bottom:0; left:-80px; background:rgba(88,166,255,0.04); }
+
+  .app { position: relative; z-index: 1; display: flex; flex-direction: column; min-height: 100vh; }
+
+  /* ── HEADER ── */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 32px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(13,17,23,0.85);
+    backdrop-filter: blur(12px);
+    position: sticky; top: 0; z-index: 100;
+  }
+
+  .logo {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 1.15rem; font-weight: 800; letter-spacing: -0.5px;
+  }
+  .logo-icon {
+    width: 32px; height: 32px;
+    background: linear-gradient(135deg, var(--red), #ff8c00);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; box-shadow: var(--glow-red);
+  }
+  .logo span { color: var(--red); }
+
+  .header-meta {
+    display: flex; align-items: center; gap: 16px;
+    font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--muted);
+  }
+  .status-dot {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--green);
+    box-shadow: 0 0 8px var(--green); animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* ── MAIN LAYOUT ── */
+  main { display: grid; grid-template-columns: 1fr 380px; gap: 0; flex: 1; }
+
+  /* ── LEFT PANEL ── */
+  .left-panel { padding: 28px 32px; border-right: 1px solid var(--border); overflow-y: auto; }
+
+  /* ── STAT CARDS ── */
+  .stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; margin-bottom: 28px; }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+    position: relative; overflow: hidden;
+    transition: border-color 0.2s, transform 0.2s;
+  }
+  .stat-card:hover { border-color: var(--blue); transform: translateY(-2px); }
+  .stat-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  }
+  .stat-card.red::before   { background: linear-gradient(90deg, var(--red), transparent); }
+  .stat-card.green::before { background: linear-gradient(90deg, var(--green), transparent); }
+  .stat-card.amber::before { background: linear-gradient(90deg, var(--amber), transparent); }
+  .stat-card.blue::before  { background: linear-gradient(90deg, var(--blue), transparent); }
+  .stat-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin-bottom: 8px; }
+  .stat-value { font-size: 1.9rem; font-weight: 800; letter-spacing: -1px; line-height: 1; }
+  .stat-value.red   { color: var(--red); }
+  .stat-value.green { color: var(--green); }
+  .stat-value.amber { color: var(--amber); }
+  .stat-value.blue  { color: var(--blue); }
+  .stat-sub { font-size: 0.7rem; color: var(--muted); margin-top: 6px; font-family: 'JetBrains Mono', monospace; }
+
+  /* ── SECTION TITLE ── */
+  .section-title {
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 2px;
+    color: var(--muted); margin-bottom: 14px; display: flex; align-items: center; gap: 8px;
+  }
+  .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  /* ── FEED ── */
+  .feed { display: flex; flex-direction: column; gap: 8px; max-height: 460px; overflow-y: auto; padding-right: 4px; }
+  .feed::-webkit-scrollbar { width: 4px; }
+  .feed::-webkit-scrollbar-track { background: transparent; }
+  .feed::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  .tx-row {
+    display: grid; grid-template-columns: auto 1fr auto auto;
+    align-items: center; gap: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 16px;
+    transition: border-color 0.2s, background 0.2s;
+    animation: slideIn 0.3s ease;
+    cursor: default;
+  }
+  .tx-row:hover { background: #12181f; border-color: #2a3446; }
+  .tx-row.fraud { border-left: 3px solid var(--red); background: rgba(255,71,87,0.04); }
+  .tx-row.legit { border-left: 3px solid var(--green); }
+
+  @keyframes slideIn {
+    from { opacity:0; transform: translateX(-10px); }
+    to   { opacity:1; transform: translateX(0); }
+  }
+
+  .tx-icon {
+    width: 36px; height: 36px; border-radius: 9px;
+    display: flex; align-items: center; justify-content: center; font-size: 16px;
+  }
+  .tx-icon.fraud { background: var(--red-dim); }
+  .tx-icon.legit { background: var(--green-dim); }
+
+  .tx-meta { overflow: hidden; }
+  .tx-id   { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--muted); }
+  .tx-desc { font-size: 0.85rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .tx-amount { font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; font-weight: 600; text-align: right; }
+  .tx-amount.fraud { color: var(--red); }
+  .tx-amount.legit { color: var(--text); }
+
+  .risk-badge {
+    font-size: 0.6rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace;
+  }
+  .risk-badge.CRITICAL { background: var(--red-dim);   color: var(--red);   border: 1px solid rgba(255,71,87,0.3); }
+  .risk-badge.HIGH     { background: var(--amber-dim); color: var(--amber); border: 1px solid rgba(240,165,0,0.3); }
+  .risk-badge.MEDIUM   { background: var(--blue-dim);  color: var(--blue);  border: 1px solid rgba(88,166,255,0.3); }
+  .risk-badge.LOW      { background: var(--green-dim); color: var(--green); border: 1px solid rgba(35,209,139,0.3); }
+
+  /* ── RIGHT PANEL — SCORER ── */
+  .right-panel {
+    background: var(--surface);
+    display: flex; flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .panel-header {
+    padding: 20px 24px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 2px; color: var(--muted);
+  }
+
+  .scorer { padding: 20px 24px; flex: 1; }
+
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .form-group.full { grid-column: 1 / -1; }
+
+  label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); }
+
+  input, select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 12px;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    width: 100%;
+  }
+  input:focus, select:focus {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(88,166,255,0.1);
+  }
+  select option { background: var(--surface); }
+
+  .score-btn {
+    width: 100%;
+    padding: 13px;
+    background: linear-gradient(135deg, var(--red), #c0392b);
+    border: none; border-radius: 10px;
+    color: white; font-family: 'Syne', sans-serif;
+    font-size: 0.9rem; font-weight: 700; letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+    box-shadow: 0 4px 16px rgba(255,71,87,0.3);
+    margin-bottom: 16px;
+  }
+  .score-btn:hover  { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(255,71,87,0.4); }
+  .score-btn:active { transform: translateY(0); }
+  .score-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  /* Result card */
+  .result-card {
+    border-radius: 12px; padding: 18px;
+    border: 1px solid var(--border);
+    display: none; animation: fadeUp 0.35s ease;
+  }
+  .result-card.show { display: block; }
+  .result-card.fraud-result { border-color: var(--red); background: rgba(255,71,87,0.06); box-shadow: var(--glow-red); }
+  .result-card.legit-result { border-color: var(--green); background: rgba(35,209,139,0.05); box-shadow: var(--glow-green); }
+
+  @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+  .result-verdict {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+  }
+  .verdict-icon { font-size: 1.6rem; }
+  .verdict-label { font-size: 1.1rem; font-weight: 800; }
+  .verdict-label.fraud { color: var(--red); }
+  .verdict-label.legit { color: var(--green); }
+
+  .score-meter { margin-bottom: 14px; }
+  .score-meter-label {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 0.68rem; color: var(--muted); margin-bottom: 6px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .score-meter-label span { font-size: 1rem; font-weight: 700; color: var(--text); }
+  .meter-track {
+    height: 8px; border-radius: 4px; background: var(--border);
+    overflow: hidden;
+  }
+  .meter-fill {
+    height: 100%; border-radius: 4px;
+    transition: width 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+    background: linear-gradient(90deg, var(--green), var(--amber), var(--red));
+  }
+
+  .risk-factors { margin-top: 12px; }
+  .risk-factors-title { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin-bottom: 8px; }
+  .factor-item {
+    display: flex; align-items: flex-start; gap: 7px;
+    font-size: 0.75rem; color: var(--text); margin-bottom: 5px; line-height: 1.4;
+  }
+  .factor-dot { color: var(--red); margin-top: 2px; flex-shrink: 0; }
+
+  .result-meta {
+    display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px;
+    padding-top: 12px; border-top: 1px solid var(--border);
+  }
+  .meta-pill {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.65rem;
+    padding: 3px 9px; border-radius: 4px;
+    background: var(--bg); border: 1px solid var(--border); color: var(--muted);
+  }
+
+  /* Loading spinner */
+  .spinner {
+    display: none; width: 18px; height: 18px;
+    border: 2px solid rgba(255,255,255,0.2); border-top-color: white;
+    border-radius: 50%; animation: spin 0.7s linear infinite; margin: 0 auto;
+  }
+  .spinner.show { display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── API STATUS BANNER ── */
+  .api-banner {
+    margin: 0 24px 16px;
+    padding: 10px 14px; border-radius: 8px;
+    font-size: 0.72rem; font-family: 'JetBrains Mono', monospace;
+    border: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg);
+  }
+  .api-banner.online  { border-color: rgba(35,209,139,0.3); color: var(--green); }
+  .api-banner.offline { border-color: rgba(255,71,87,0.3);  color: var(--red); }
+  .api-banner.checking { color: var(--muted); }
+
+  /* Preset buttons */
+  .presets { display: flex; gap: 8px; margin-bottom: 16px; }
+  .preset-btn {
+    flex: 1; padding: 7px; font-family: 'Syne', sans-serif;
+    font-size: 0.7rem; font-weight: 600; border-radius: 7px;
+    cursor: pointer; border: 1px solid var(--border);
+    transition: all 0.15s;
+  }
+  .preset-btn.fraud-preset { background: var(--red-dim); color: var(--red); border-color: rgba(255,71,87,0.3); }
+  .preset-btn.legit-preset { background: var(--green-dim); color: var(--green); border-color: rgba(35,209,139,0.3); }
+  .preset-btn:hover { opacity: 0.8; transform: translateY(-1px); }
+
+  /* ── MINI CHART ── */
+  .chart-area { padding: 0 32px 28px; }
+  .mini-bars { display: flex; align-items: flex-end; gap: 4px; height: 80px; }
+  .mini-bar {
+    flex: 1; border-radius: 3px 3px 0 0;
+    transition: height 0.4s ease, background 0.3s;
+    min-height: 4px;
+  }
+  .bar-labels { display: flex; gap: 4px; margin-top: 4px; }
+  .bar-label { flex: 1; text-align: center; font-size: 0.55rem; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; }
+    .right-panel { border-top: 1px solid var(--border); }
+    .stats-row { grid-template-columns: repeat(2,1fr); }
+  }
+</style>
+</head>
+<body>
+<div class="ambient ambient-1"></div>
+<div class="ambient ambient-2"></div>
+
+<div class="app">
+  <!-- HEADER -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">🛡</div>
+      Fraud<span>Shield</span>
+    </div>
+    <div class="header-meta">
+      <div class="status-dot" id="headerDot"></div>
+      <span id="headerStatus">connecting…</span>
+      <span>|</span>
+      <span id="headerTime">--:--:--</span>
+    </div>
+  </header>
+
+  <main>
+    <!-- LEFT -->
+    <div class="left-panel">
+
+      <!-- STATS -->
+      <div class="stats-row" id="statsRow">
+        <div class="stat-card red">
+          <div class="stat-label">Fraud Flagged</div>
+          <div class="stat-value red" id="statFraud">0</div>
+          <div class="stat-sub">this session</div>
+        </div>
+        <div class="stat-card green">
+          <div class="stat-label">Legitimate</div>
+          <div class="stat-value green" id="statLegit">0</div>
+          <div class="stat-sub">this session</div>
+        </div>
+        <div class="stat-card amber">
+          <div class="stat-label">Avg Score</div>
+          <div class="stat-value amber" id="statAvgScore">—</div>
+          <div class="stat-sub">fraud probability</div>
+        </div>
+        <div class="stat-card blue">
+          <div class="stat-label">Model F1</div>
+          <div class="stat-value blue" id="statF1">—</div>
+          <div class="stat-sub" id="statRocAuc">ROC-AUC —</div>
+        </div>
+      </div>
+
+      <!-- MINI CHART -->
+      <div class="chart-area">
+        <div class="section-title">Score History</div>
+        <div class="mini-bars" id="miniChart"></div>
+        <div class="bar-labels" id="miniLabels"></div>
+      </div>
+
+      <!-- FEED -->
+      <div class="section-title">Live Transaction Feed</div>
+      <div class="feed" id="feed">
+        <div style="text-align:center;padding:40px 0;color:var(--muted);font-size:0.8rem;">
+          Score a transaction to see it here
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="right-panel">
+      <div class="panel-header">Transaction Scorer</div>
+
+      <!-- API status -->
+      <div style="padding: 14px 24px 0;">
+        <div class="api-banner checking" id="apiBanner">
+          ⟳ &nbsp;Checking API connection…
+        </div>
+      </div>
+
+      <div class="scorer">
+        <!-- Presets -->
+        <div class="presets">
+          <button class="preset-btn fraud-preset" onclick="loadPreset('fraud')">⚠ Load Fraud Sample</button>
+          <button class="preset-btn legit-preset" onclick="loadPreset('legit')">✓ Load Legit Sample</button>
+        </div>
+
+        <!-- Form -->
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Amount (₹)</label>
+            <input type="number" id="amount" value="4500" min="1" />
+          </div>
+          <div class="form-group">
+            <label>Hour (0–23)</label>
+            <input type="number" id="hour" value="23" min="0" max="23" />
+          </div>
+          <div class="form-group">
+            <label>Merchant Category</label>
+            <select id="merchant_cat">
+              <option>grocery</option><option>electronics</option>
+              <option>travel</option><option>dining</option>
+              <option>fuel</option><option>healthcare</option>
+              <option selected>luxury</option><option>online_retail</option>
+              <option>entertainment</option><option>utilities</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Country</label>
+            <select id="country">
+              <option>IN</option><option>US</option><option>GB</option>
+              <option>AE</option><option>SG</option><option>CN</option>
+              <option selected>NG</option><option>BR</option><option>RU</option><option>XX</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Device</label>
+            <select id="device_type">
+              <option selected>mobile</option><option>desktop</option>
+              <option>tablet</option><option>pos_terminal</option><option>atm</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Channel</label>
+            <select id="channel">
+              <option selected>online</option><option>pos</option>
+              <option>atm</option><option>mobile_app</option><option>ivr</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>City</label>
+            <select id="city">
+              <option>Mumbai</option><option>Delhi</option><option>Bengaluru</option>
+              <option>Chennai</option><option>Hyderabad</option>
+              <option selected>Unknown</option><option>London</option>
+              <option>Dubai</option><option>Singapore</option><option>Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Day of Week (0=Mon)</label>
+            <input type="number" id="dayofweek" value="6" min="0" max="6" />
+          </div>
+          <div class="form-group">
+            <label>Tx Count 24h</label>
+            <input type="number" id="prev_24h_tx" value="14" min="0" />
+          </div>
+          <div class="form-group">
+            <label>Amt Spent 24h (₹)</label>
+            <input type="number" id="prev_24h_amt" value="72000" min="0" />
+          </div>
+          <div class="form-group">
+            <label>Tx Count 1h</label>
+            <input type="number" id="prev_1h_tx" value="7" min="0" />
+          </div>
+          <div class="form-group">
+            <label>Velocity Amt 1h (₹)</label>
+            <input type="number" id="velocity_1h" value="38000" min="0" />
+          </div>
+          <div class="form-group">
+            <label>International</label>
+            <select id="is_international">
+              <option value="1" selected>Yes</option>
+              <option value="0">No</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Night Txn</label>
+            <select id="is_night">
+              <option value="1" selected>Yes</option>
+              <option value="0">No</option>
+            </select>
+          </div>
+        </div>
+
+        <button class="score-btn" id="scoreBtn" onclick="scoreTransaction()">
+          <span id="btnText">Analyse Transaction</span>
+          <span class="spinner" id="btnSpinner"></span>
+        </button>
+
+        <!-- Result -->
+        <div class="result-card" id="resultCard">
+          <div class="result-verdict">
+            <span class="verdict-icon" id="verdictIcon"></span>
+            <div>
+              <div class="verdict-label" id="verdictLabel"></div>
+              <div style="font-size:0.7rem;color:var(--muted);font-family:'JetBrains Mono',monospace;" id="verdictSub"></div>
+            </div>
+          </div>
+          <div class="score-meter">
+            <div class="score-meter-label">
+              Fraud Score <span id="scoreDisplay">0.00</span>
+            </div>
+            <div class="meter-track">
+              <div class="meter-fill" id="meterFill" style="width:0%"></div>
+            </div>
+          </div>
+          <div class="risk-factors">
+            <div class="risk-factors-title">Risk Factors</div>
+            <div id="factorsList"></div>
+          </div>
+          <div class="result-meta" id="resultMeta"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+const API = 'http://localhost:8000';
+let sessionScores = [];
+let sessionFraud  = 0;
+let sessionLegit  = 0;
+let apiOnline     = false;
+
+// ── Clock ──────────────────────────────────────────────────────────────────
+function tick() {
+  document.getElementById('headerTime').textContent =
+    new Date().toLocaleTimeString('en-IN', {hour12: false});
+}
+tick(); setInterval(tick, 1000);
+
+// ── API Health Check ───────────────────────────────────────────────────────
+async function checkApi() {
+  const banner = document.getElementById('apiBanner');
+  const dot    = document.getElementById('headerDot');
+  const status = document.getElementById('headerStatus');
+  try {
+    const r = await fetch(`${API}/`, {signal: AbortSignal.timeout(3000)});
+    if (r.ok) {
+      apiOnline = true;
+      banner.className = 'api-banner online';
+      banner.innerHTML = '● &nbsp;API online — localhost:8000';
+      dot.style.background = 'var(--green)';
+      dot.style.boxShadow  = '0 0 8px var(--green)';
+      status.textContent   = 'API online';
+      loadModelMetrics();
+    } else throw new Error();
+  } catch {
+    apiOnline = false;
+    banner.className = 'api-banner offline';
+    banner.innerHTML = '✕ &nbsp;API offline — run: uvicorn serving.api:app --port 8000';
+    dot.style.background = 'var(--red)';
+    dot.style.boxShadow  = '0 0 8px var(--red)';
+    status.textContent   = 'API offline';
+  }
+}
+
+async function loadModelMetrics() {
+  try {
+    const r = await fetch(`${API}/metrics`);
+    const d = await r.json();
+    document.getElementById('statF1').textContent     = d.metrics.f1_score.toFixed(3);
+    document.getElementById('statRocAuc').textContent = `ROC-AUC ${d.metrics.roc_auc.toFixed(3)}`;
+  } catch {}
+}
+
+// ── Presets ────────────────────────────────────────────────────────────────
+const PRESETS = {
+  fraud: {
+    amount:48000, hour:3, merchant_cat:'luxury', country:'NG',
+    device_type:'mobile', channel:'online', city:'Unknown', dayofweek:6,
+    prev_24h_tx:14, prev_24h_amt:72000, prev_1h_tx:7, velocity_1h:38000,
+    is_international:1, is_night:1
+  },
+  legit: {
+    amount:350, hour:14, merchant_cat:'grocery', country:'IN',
+    device_type:'pos_terminal', channel:'pos', city:'Mumbai', dayofweek:2,
+    prev_24h_tx:2, prev_24h_amt:800, prev_1h_tx:0, velocity_1h:0,
+    is_international:0, is_night:0
+  }
+};
+
+function loadPreset(type) {
+  const p = PRESETS[type];
+  document.getElementById('amount').value           = p.amount;
+  document.getElementById('hour').value             = p.hour;
+  document.getElementById('merchant_cat').value     = p.merchant_cat;
+  document.getElementById('country').value          = p.country;
+  document.getElementById('device_type').value      = p.device_type;
+  document.getElementById('channel').value          = p.channel;
+  document.getElementById('city').value             = p.city;
+  document.getElementById('dayofweek').value        = p.dayofweek;
+  document.getElementById('prev_24h_tx').value      = p.prev_24h_tx;
+  document.getElementById('prev_24h_amt').value     = p.prev_24h_amt;
+  document.getElementById('prev_1h_tx').value       = p.prev_1h_tx;
+  document.getElementById('velocity_1h').value      = p.velocity_1h;
+  document.getElementById('is_international').value = p.is_international;
+  document.getElementById('is_night').value         = p.is_night;
+}
+
+// ── Score Transaction ──────────────────────────────────────────────────────
+async function scoreTransaction() {
+  if (!apiOnline) {
+    alert('API is offline. Start it with:\nuvicorn serving.api:app --reload --port 8000');
+    return;
+  }
+
+  const btn     = document.getElementById('scoreBtn');
+  const btnText = document.getElementById('btnText');
+  const spinner = document.getElementById('btnSpinner');
+  btn.disabled      = true;
+  btnText.style.display = 'none';
+  spinner.classList.add('show');
+
+  const payload = {
+    amount:                 parseFloat(document.getElementById('amount').value),
+    merchant_cat:           document.getElementById('merchant_cat').value,
+    country:                document.getElementById('country').value,
+    city:                   document.getElementById('city').value,
+    device_type:            document.getElementById('device_type').value,
+    channel:                document.getElementById('channel').value,
+    hour:                   parseInt(document.getElementById('hour').value),
+    dayofweek:              parseInt(document.getElementById('dayofweek').value),
+    prev_24h_tx_count_card: parseFloat(document.getElementById('prev_24h_tx').value),
+    prev_24h_amt_card:      parseFloat(document.getElementById('prev_24h_amt').value),
+    prev_1h_tx_count_card:  parseFloat(document.getElementById('prev_1h_tx').value),
+    velocity_amt_1h:        parseFloat(document.getElementById('velocity_1h').value),
+    is_international:       parseInt(document.getElementById('is_international').value),
+    is_night:               parseInt(document.getElementById('is_night').value),
+  };
+
+  try {
+    const r = await fetch(`${API}/predict`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const result = await r.json();
+    renderResult(result, payload);
+    addToFeed(result, payload);
+    updateStats(result);
+    updateChart(result.fraud_score);
+  } catch (e) {
+    alert('Error calling API: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btnText.style.display = '';
+    spinner.classList.remove('show');
+  }
+}
+
+// ── Render Result ──────────────────────────────────────────────────────────
+function renderResult(res, payload) {
+  const card   = document.getElementById('resultCard');
+  const isFraud = res.is_fraud;
+
+  card.className = `result-card show ${isFraud ? 'fraud-result' : 'legit-result'}`;
+
+  document.getElementById('verdictIcon').textContent  = isFraud ? '⚠️' : '✅';
+  document.getElementById('verdictLabel').textContent = isFraud ? 'FRAUD DETECTED' : 'LEGITIMATE';
+  document.getElementById('verdictLabel').className   = `verdict-label ${isFraud ? 'fraud' : 'legit'}`;
+  document.getElementById('verdictSub').textContent   = `Risk: ${res.risk_level}  ·  Threshold: ${res.threshold_used}`;
+  document.getElementById('scoreDisplay').textContent = res.fraud_score.toFixed(4);
+
+  const pct = (res.fraud_score * 100).toFixed(1);
+  document.getElementById('meterFill').style.width = pct + '%';
+
+  const factorsList = document.getElementById('factorsList');
+  factorsList.innerHTML = res.top_risk_factors.map(f =>
+    `<div class="factor-item"><span class="factor-dot">◆</span>${f}</div>`
+  ).join('');
+
+  document.getElementById('resultMeta').innerHTML = [
+    `<span class="meta-pill">₹${payload.amount.toLocaleString()}</span>`,
+    `<span class="meta-pill">${payload.merchant_cat}</span>`,
+    `<span class="meta-pill">${payload.country}</span>`,
+    `<span class="meta-pill">${payload.channel}</span>`,
+  ].join('');
+}
+
+// ── Feed ───────────────────────────────────────────────────────────────────
+const CAT_ICONS = {grocery:'🛒',electronics:'💻',travel:'✈️',dining:'🍽',fuel:'⛽',
+                   healthcare:'🏥',luxury:'💎',online_retail:'📦',entertainment:'🎬',utilities:'🔌'};
+
+function addToFeed(res, payload) {
+  const feed     = document.getElementById('feed');
+  const isFraud  = res.is_fraud;
+  const icon     = CAT_ICONS[payload.merchant_cat] || '💳';
+  const txId     = 'TX' + Math.floor(Math.random()*1e8).toString().padStart(8,'0');
+
+  // Clear placeholder
+  if (feed.children.length === 1 && feed.children[0].tagName !== 'DIV'.toUpperCase()
+      || feed.firstElementChild?.style.textAlign === 'center') {
+    feed.innerHTML = '';
+  }
+
+  const row = document.createElement('div');
+  row.className = `tx-row ${isFraud ? 'fraud' : 'legit'}`;
+  row.innerHTML = `
+    <div class="tx-icon ${isFraud ? 'fraud' : 'legit'}">${icon}</div>
+    <div class="tx-meta">
+      <div class="tx-id">${txId}</div>
+      <div class="tx-desc">${payload.merchant_cat} · ${payload.country} · ${payload.channel}</div>
+    </div>
+    <div class="tx-amount ${isFraud ? 'fraud' : 'legit'}">₹${payload.amount.toLocaleString()}</div>
+    <div class="risk-badge ${res.risk_level}">${res.risk_level}</div>
+  `;
+
+  feed.insertBefore(row, feed.firstChild);
+  if (feed.children.length > 30) feed.removeChild(feed.lastChild);
+}
+
+// ── Stats ──────────────────────────────────────────────────────────────────
+function updateStats(res) {
+  if (res.is_fraud) sessionFraud++; else sessionLegit++;
+  sessionScores.push(res.fraud_score);
+
+  document.getElementById('statFraud').textContent = sessionFraud;
+  document.getElementById('statLegit').textContent = sessionLegit;
+
+  const avg = sessionScores.reduce((a,b)=>a+b,0)/sessionScores.length;
+  document.getElementById('statAvgScore').textContent = avg.toFixed(3);
+}
+
+// ── Mini Chart ─────────────────────────────────────────────────────────────
+const chartScores = [];
+function updateChart(score) {
+  chartScores.push(score);
+  if (chartScores.length > 20) chartScores.shift();
+
+  const chart  = document.getElementById('miniChart');
+  const labels = document.getElementById('miniLabels');
+  const max    = Math.max(...chartScores, 0.1);
+
+  chart.innerHTML = chartScores.map((s,i) => {
+    const h   = Math.round((s / max) * 76) + 4;
+    const col = s > 0.5 ? 'var(--red)' : s > 0.25 ? 'var(--amber)' : 'var(--green)';
+    return `<div class="mini-bar" style="height:${h}px;background:${col};opacity:${0.5 + 0.5*(i/chartScores.length)}"></div>`;
+  }).join('');
+
+  labels.innerHTML = chartScores.map(s =>
+    `<div class="bar-label">${s.toFixed(2)}</div>`
+  ).join('');
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+checkApi();
+setInterval(checkApi, 15000);
+</script>
+</body>
+</html>
