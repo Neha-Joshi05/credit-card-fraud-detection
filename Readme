@@ -29,7 +29,7 @@ Credit-Card-Fraud-Detection/
 │
 ├── notebooks/
 │   ├── 01_ingest.py          # Schema enforcement + type casting
-│   ├── 02_eda.py             # 7 EDA charts → outputs/
+│   ├── 02_eda.py             # 7 EDA charts → images/
 │   ├── 03_features.py        # Feature engineering + SMOTE splits
 │   ├── 04_train.py           # XGBoost + Optuna (50 trials) + evaluation
 │   └── 05_explain.py         # SHAP waterfall, beeswarm, dependence plots
@@ -40,7 +40,7 @@ Credit-Card-Fraud-Detection/
 │   ├── best_params.joblib
 │   └── eval_metrics.joblib
 │
-├── outputs/                  # Charts generated at runtime (gitignored)
+├── images/                  # Charts generated at runtime (gitignored)
 │
 ├── serving/
 │   ├── api.py                # FastAPI app (4 endpoints)
@@ -164,7 +164,7 @@ SHAP (SHapley Additive exPlanations) charts are generated for the trained model:
 - **Dependence plots** — top 4 features vs their SHAP values
 - **Waterfall plots** — individual prediction breakdowns (highest-confidence fraud + borderline legit)
 
-Charts saved to `outputs/14_shap_*.png`.
+Charts saved to `images/14_shap_*.png`.
 
 ---
 
@@ -267,77 +267,81 @@ Features:
 
 ## 📈 EDA Charts
 
-Generated to `outputs/` after running `python notebooks/02_eda.py`.
+Generated to `images/` after running `python notebooks/02_eda.py`.
 
 ### Class Imbalance
-![Class Imbalance](outputs/01_class_imbalance.png)
+![Class Imbalance](images/01_class_imbalance.png)
 
 ### Transaction Amount Distribution
-![Amount Distribution](outputs/02_amount_distribution.png)
+![Amount Distribution](images/02_amount_distribution.png)
 
 ### Temporal Fraud Patterns
-![Time Patterns](outputs/03_time_patterns.png)
+![Time Patterns](images/03_time_patterns.png)
 
 ### Fraud Rate by Merchant Category
-![Merchant Category](outputs/04_merchant_category.png)
+![Merchant Category](images/04_merchant_category.png)
 
 ### Velocity & Behavioural Features
-![Velocity Features](outputs/05_velocity_features.png)
+![Velocity Features](images/05_velocity_features.png)
 
 ### Feature Correlation Heatmap
-![Correlation Heatmap](outputs/06_correlation_heatmap.png)
+![Correlation Heatmap](images/06_correlation_heatmap.png)
 
 ### Geographic & Channel Breakdown
-![Geo Channel](outputs/07_geo_channel.png)
+![Geo Channel](images/07_geo_channel.png)
 
 ---
 
 ## 📉 Model Evaluation Charts
 
-Generated to `outputs/` after running `python notebooks/04_train.py`.
+Generated to `images/` after running `python notebooks/04_train.py`.
 
 ### ROC & Precision-Recall Curves
-![ROC PR Curves](outputs/08_roc_pr_curves.png)
+![ROC PR Curves](images/08_roc_pr_curves.png)
 
 ### Confusion Matrix
-![Confusion Matrix](outputs/09_confusion_matrix.png)
+![Confusion Matrix](images/09_confusion_matrix.png)
 
 ### Feature Importance
-![Feature Importance](outputs/10_feature_importance.png)
+![Feature Importance](images/10_feature_importance.png)
 
 ### Fraud Score Distribution
-![Score Distribution](outputs/11_score_distribution.png)
+![Score Distribution](images/11_score_distribution.png)
 
 ### Optuna Hyperparameter Search
-![Optuna History](outputs/12_optuna_history.png)
+![Optuna History](images/12_optuna_history.png)
 
 ### F1 Score vs Threshold
-![Threshold Analysis](outputs/13_threshold_analysis.png)
+![Threshold Analysis](images/13_threshold_analysis.png)
 
 ---
 
 ## 🔍 SHAP Explainability Charts
 
-Generated to `outputs/` after running `python notebooks/05_explain.py`.
+Generated to `images/` after running `python notebooks/05_explain.py`.
 
 ### SHAP Beeswarm — Global Feature Impact
-![SHAP Beeswarm](outputs/14_shap_beeswarm.png)
+![SHAP Beeswarm](images/14_shap_beeswarm.png)
 
 ### SHAP Bar — Mean |SHAP| Importance
-![SHAP Bar](outputs/15_shap_bar.png)
+![SHAP Bar](images/15_shap_bar.png)
 
 ### SHAP Dependence Plots — Top 4 Features
-![SHAP Dependence](outputs/16_shap_dependence.png)
+![SHAP Dependence](images/16_shap_dependence.png)
 
 ### SHAP Waterfall — Highest-Confidence Fraud
-![SHAP Waterfall Fraud](outputs/17_shap_waterfall_fraud.png)
+![SHAP Waterfall Fraud](images/17_shap_waterfall_fraud.png)
 
 ### SHAP Waterfall — Borderline Legit
-![SHAP Waterfall Legit](outputs/18_shap_waterfall_legit.png)
+![SHAP Waterfall Legit](images/18_shap_waterfall_legit.png)
 
 ---
 
+## 📝 License
 
+MIT License — free to use, modify, and distribute.
+
+---
 
 ## 🙏 Acknowledgements
 
